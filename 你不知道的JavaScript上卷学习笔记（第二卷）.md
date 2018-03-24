@@ -153,4 +153,154 @@ js中构造函数与其他面向对象语言不同，只是一些new操作符调
 ```
 var bar = new foo(2);
 ```
-所有使用
+所有使用new创建的对象，会在堆中开辟一个新空间存储。
+使用new来调用foo(...)时，我们会构造一个新的对象，并绑定到foo中的this上。
+
+## this优先级
+1. new
+函数是否在new中调用，如果是则绑定的是新创建的对象
+2. 是否通过call或apply应绑定，如果是，则this指向指定对象
+3. 函数是否在某个上下文对象中调用
+4. 如果都不是就是默认绑定，严格模式下undefined，非严格模式下是全局对象
+
+>bing()的功能之一就是可以把除了第一个参数（第一个参数用来绑定this）之外的所有参数传给下层函数  
+这是柯里化的一种，称为部分应用。
+```
+function foo(p1,p2){
+    this.val=p1+p2;
+} 
+var bar = foo.bind(null,"p1");
+var baz = new bar("p2");
+baz.val;//p1p2
+```
+>这里用null是因为我们并不关心硬绑定的this是谁，反正会被new修改。  
+## 绑定例外
+### 被忽略的this
+如果把null或者undefined作为this的对象传入call，apply或者bind，这些值在调用时会被忽略，
+实际应用的是默认绑定规则（就是严格undefined非严格全局）  
+常见应用：
+- 使用appply(...)来展开一个数组当作参数传入函数
+```angular2html
+function foo(a,b){
+    console.log('a:'+a+' b:'+b);
+  }
+ foo.apply(null,[2,3]);
+ //其实就是利用apply传参，apply接数组
+```
+- 使用bind进行柯里化
+```angular2html
+var bar = foo.bind(null,2);
+bar(3);
+//先用bind给foo传过去一个参数，
+//这样在执行的时候只要传另一个参数就好了
+```
+>柯里化作用：延迟执行，参数服用，提前返回
+>es6里可以用...arr展开数组，arr是数组，...arr是数组的元素
+
+使用null来忽略this在函数确实使用了this时会产生副作用。  
+但是可以创建一个DMZ对象（非军事区对象）——就是一个空的非委托对象，在忽略this绑定是总是传入  
+那么对于this的使用都会被限制在这个空对象中，不会对全局对象产生任何影响  
+在js中创建一个空对象的最简单的方法都是Object.create(null)  
+这种放发不会创建prototype这个委托，所以比{}更空
+```
+Object.create(null);
+{} 
+    No properties
+```
+```
+{}
+    {}
+    __proto__: 
+        Objectconstructor: ƒ 
+        Object()hasOwnProperty: ƒ 
+        hasOwnProperty()
+
+        ...
+        
+```
+```
+    function foo(a,b){
+        console.log(...);
+    }
+    //创建DMZ空对象
+    var o = Object.create(null);
+    foo.apply(o,[2,3]);
+    var bar = foo.bind(o,2);
+```
+### 间接引用
+有可能有意或无意的创建于给函数的间接引用
+最容易在赋值时发生！这也很重要 多看几遍记住并理解这个例子
+```angular2html
+function foo(){
+    console.log(this.a);
+}
+var a = 2;
+var o ={a:3,foo:foo};
+var p = {a :4};
+o.foo();//3
+(p.foo=o.foo)();//2
+```
+赋值表达式p.foo=o.foo返回值是目标函数的引用，o.foo其实是一段地址 
+指向了foo这个函数，赋值之后p.foo也指向了这个函数，然后直接调用了p.foo；
+这里this就是默认绑定了。
+### 软绑定
+硬绑定可以在new以外的情况把this强制绑定到指定的对象上，  
+防止函数应用默认绑定，但是这样会大大降低函数的灵活性，一旦绑定后就无法修改this。  
+如果给默认绑定制定一个全局对象或undefined以外的值，就可以实现和硬绑定相同的效果，同时保留隐式绑定或者显示绑定修改this的能力。
+可以通过一种被称为软绑定的方法来实现我们想要的效果：  
+```angular2html
+if（！Function.prototype.softBind){
+    Function.protoype.softBind = function(obj){
+        var fn = this;
+        //捕获参数
+        var curried = [].slice.call(arguments,1);
+        var bound = function(){
+            return fn.apply(
+            (!this||this===(window||global))?obj:this.curried.concat.apply(curried,arguments)
+            );
+        }
+        bound.prototype = Object.create(fn.prototype);
+        return bound;
+    };
+}
+```
+除了软绑定之外，softBind(...)的其他原理和ES5内置的bind(...)类似。  
+它还会对指定的函数进行封装
+### 箭头函数的this词法
+箭头函数不使用this的四种规则，而是根据外层（函数或者全局）作用域来决定this。  
+箭头函数的绑定无法被修改 new也不行。  
+```angular2html
+function foo(){
+    //返回一个箭头函数
+    return(a) => {
+        console.log(this.a);
+    };
+}
+var obj1 = {
+a:1
+};
+var obj2= {
+a:2
+};
+var bar = foo.call(obj1);
+bar.call(obj2);//输出1！！！
+```
+这里foo()内部创建的箭头函数会捕获调用时foo()的this。  
+由于foo()的this绑定到了obj1，bar(引用箭头函数)的this也会绑定到obj1.  
+箭头函数的绑定无法被修改！
+箭头函数常被用于回调函数中
+```
+function foo(){
+    setTimeout(() => {
+        //这里的this继承自foo
+        console.log(this.a);
+    },1000)
+}
+var obj={a:2};
+foo.call(obj);//2
+```
+>题外话，有没有理解为什么用call呢？
+>前面有个obj里有foo:foo，所以可以直接obj.foo，这里obj里没有foo,所以就要foo.call(obj)  
+
+ES之前需要显式的去把this的值赋值给一个变量。  
+var self = this;然后再用setTimeout函数  
