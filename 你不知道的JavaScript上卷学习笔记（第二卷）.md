@@ -19,7 +19,7 @@ var obj = {
     a:2,
     foo:foo
 };
-obj.foo();
+obj.foo();//2
 ```    
 本例说明：
 - 函数foo，无论是直接在obj中定义还是先定义再添加为引用属性，严格来说都不属于obj对象；
@@ -399,6 +399,7 @@ arr.baz;//"baz"
 var newObj = JSON.parse(JSON.stringify(somObj));
 ```
 ES6的浅拷贝方法：
+
 ```angular2html
 Object.assign();
 var newObj = Object.assign({},myObj)
@@ -406,11 +407,13 @@ var newObj = Object.assign({},myObj)
 //会遍历一个或多个源对象的所有可枚举的自有键，并复制（使用=赋值操作）到对象。  
 //因为使用=赋值操作，源对象属性的一些特性（writable）不会复制到目标对象。
 ```
+
 5. 属性描述符
-ES5开始所有属性有了属性描述符。  
-创建普通属性时，属性描述符会使用默认值，我们也可以用Object.defineProperty()来添加要给属性或修改一个已有属性。  
-修改需要这个属性是可修改的（configurable）。  
-```angular2html
+ES5开始所有属性有了属性描述符。
+创建普通属性时，属性描述符会使用默认值，我们也可以用Object.defineProperty()来添加要给属性或修改一个已有属性。
+修改需要这个属性是可修改的（configurable）。
+
+```
 var myObject = {};
 Object.defineProperty(myObject,"a",{
     value:2,
@@ -419,6 +422,7 @@ Object.defineProperty(myObject,"a",{
     enumerable:true
 });
 ```
+
 一般这种方式只用来修改属性描述符。  
 writable：是否可修改value，为false时修改值会静默失败，silently failed。严格模式下出错，typeError。  
 configurable：属性是否是可配置的。修改为false单向操作，不可撤销。为false时不可修改不可删除。  
@@ -535,7 +539,8 @@ some会一直运行到回调函数返回true
 every和some中特殊的返回值和普通for循环中的break语句类似，会提前终止遍历。  
 
 Es6新增遍历数组的for..of语法
-```angular2html
+
+```
 var arr = [1,2,3];
 for(var v of arr){
     console.log(v)
@@ -544,10 +549,12 @@ for(var v of arr){
 //2
 //3
 ```
+
 for..of循环会先向被访问对象请求一个迭代器对象，然后通过调用迭代器对象的next()方法来遍历所有返回值。  
   
 数组有内置的@@iterator，因此for..of可以直接应用在数组上，调用内置的@@iterator是下面这样的：
-```angular2html
+
+```
 var arr = [1,2,3];
 var it = arr[Symbol.iterator]();
 it.next();//{value:1,done:false}
@@ -555,6 +562,7 @@ it.next();//{value:2,done:false}
 it.next();//{value:3,done:false}
 it.next();//{done:true}
 ```
+
 @@iterator不是对象，是一个返回迭代器对象的函数  
 调用迭代器的next()方法会返回形式为{valueL..,done:..}的值，value是当前的遍历值，done是一个布尔值，表示是否还有可以遍历的值。  
 
@@ -756,4 +764,34 @@ Object.create()创建一个新对象，并把它关联到我们指定的对象�
 我们不需要类来创建两个对象之间的关系，只需要通过委托。create()不包括任何“类的诡计”，所以可以完美的创建我们想要的关联关系。
 
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+# Ch6 委托
+
+上一章结论：[[prototypr]]链就是指对象中的一个内部链接引用了另一个对象。
+换句话说，js中的这个机制就是**对象之间的关联关系**
+
+##面向委托的设计
+这和面向类有些不同。
+类设计模式鼓励你在继承时使用方法重写和多态。现在可以实例化子类的一些副本然后是这些执行任务。构造完成后你通常只需要操作这些实例（不是类）。
+
+委托行为呢，首先定义一个Task对象（不是类也不是函数）。Task包含了所有任务都可以使用的具体行为，接着对每个任务都会定义一个对象来存储对应的数据和行为。你会把特定的任务对象都关联到Task功能对象上，让他们在需要的时候进行委托。
+
+```
+XYZ = Object.create(Task); //委托
+```
+XYZ和Task都是对象。XYZ通过create创建，他的[[prototypr]]委托了Task对象。
+[[prototype]]委托中最好把状态保存在委托者而不是委托目标（Task）上。
+类设计模式中，会让父类和子类有同名的方法，就可以利用重写或多态的优势。而在委托行为中，尽量避免相同的命名。
+在XYZ上运行Task的一个方法时，现在XYZ自身查找是否有这个方法名单是XYZ没有，会通过原型链找到Task继续寻找。此时还会出发this的隐式绑定规则，这个方法里的this运行时仍然绑定到XYZ。
+
+在委托设计模式中，对象不是按照父类到子类的关系垂直组织的，而是通过任意方向的委托关联并排组织的。
+
+互相委托行为十进制的，无法在两个或两个以上互相委托的对象之间简历循环委托。如果引用了一个都不存在的属性后者方法，那就会产生一个无限递归循环。
+
+#### 比较类和委托两种设计模式
+类设计模式，子类Bar继承父类F哦哦，然后生成了b1和b2两个实例，b1委托了Bar.prototype,Bar.prototype委托了Foo.prototype。
+委托设计模式简洁很多：
+```
+Bar = Object.create(Foo);
+var b1 = Object.create(Bar);
+```
+只是把对象关联起来，并不需要复杂的模仿类的行为。
